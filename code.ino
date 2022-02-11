@@ -1,0 +1,206 @@
+//======================================================================================//
+//                                                                                      //
+//                 Solar Panel Energy Monitoring V1.0 Firmware                             //
+//                                                                                      //
+//             Developed by Debasish Dutta, Last Update: 06.05.2021                     //                 
+//                                                                                      //
+//======================================================================================// 
+
+
+#include <SPI.h>
+    
+    #include <Adafruit_GFX.h>
+    #include <Adafruit_SH110X.h>
+// #include <DallasTemperature.h> 
+//#include <OneWire.h>   
+    #include "Wire.h"    
+//    #include <WiFi.h>          
+//    #define BLYNK_PRINT Serial
+//    #include <BlynkSimpleEsp32.h>
+    
+    #define SCREEN_WIDTH 128 // OLED display width, in pixels
+    #define SCREEN_HEIGHT 64 // OLED display height, in pixels
+    #define INPUT_VOLTAGE_SENSE_PIN 34
+    #define INPUT_CURRENT_SENSE_PIN 35
+    //#define TEMP_SENSE_PIN 4
+    #define VOLTAGE_SCALE  7.911 // R1+R2 / R2 // ( 47K + 6.8K ) / 6.8K
+    #define CURRENT_SCALE  1.5 // R4+R5 / R5 // ( 1K + 2K ) / 2K
+    
+    double mVperAmp = 200; //Sensityvit of the sensor //  use 100 for 20A Module and 66 for 30A Module
+    double ACSoffset = 514; // Ideally it should be ( 0.1 x Vcc ) // measured value is 514mV
+    unsigned long last_time =0;
+    unsigned long current_time =0;
+    float power =0 ; // Power in Watt
+    float energy =0 ; // Emergy in Watt-Hour
+    //float tempC=0; // temperaure in Celcius
+    //float tempF = 0; temperature in F
+    float saving=0; // cost saving  
+   #define i2c_Address 0x3c
+    #define OLED_RESET -1
+     //WiFiClient client;
+    // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+   Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+    // GPIO where the DS18B20 is connected to
+    //const int oneWireBus = 2;    
+    // Setup a oneWire instance to communicate with any OneWire devices
+//    OneWire oneWire(TEMP_SENSE_PIN);
+//    DallasTemperature sensors(&oneWire);
+    
+//========================= Variables for wifi server setup =============================
+//     
+//  // Your WiFi credentials.
+//  // Set password to "" for open networks.
+//  char ssid[] = "XXXX"; // WiFi Router ssid
+//  char pass[] = "XXXX"; // WiFi Router password
+//  
+//  // copy it from the mail received from Blynk
+//  char auth[] = "XXXX";  
+  
+//========================= Setup Function ================================================ 
+    
+void setup() {
+  Serial.begin(9600);
+//  Blynk.begin(auth, ssid, pass);
+//  sensors.begin();
+  
+  display.begin(i2c_Address, true);  
+  display.clearDisplay();  
+  display.setTextColor(SH110X_WHITE);
+  display.display();  
+  delay(500);
+}
+
+//========================= Loop Function ================================================ 
+    
+
+void loop()
+{
+ 
+  // read voltage and current
+  float voltage = abs( return_voltage_value(INPUT_VOLTAGE_SENSE_PIN)) ;
+  float current = abs( return_current_value(INPUT_CURRENT_SENSE_PIN)) ;
+
+ // read temperature from DS18B20
+//  sensors.requestTemperatures(); // get temperatures
+//  tempC = sensors.getTempCByIndex(0);
+//  //tempF = sensors.getTempFByIndex(0); 
+
+  // Calculate power and energy
+  power = current * voltage ; // calculate power in Watt
+  last_time = current_time;
+  current_time = millis();    
+  energy = energy +  power *(( current_time -last_time) /3600000.0) ; // calculate power in Watt-Hour // 1 Hour = 60mins x 60 Secs x 1000 Milli Secs
+
+  saving = 6.5 * ( energy /1000 ); // 6.5 is cost per kWh // used just for example
+  
+
+  // ================= Display Data on Serial Monitor ================================================ 
+  
+ /* Serial.print("Voltage: ");
+  Serial.println(voltage);
+  Serial.print("Current: ");
+  Serial.println(current);
+  Serial.print("Power: ");
+  Serial.println(power);
+  Serial.print("Energy: ");
+  Serial.println(energy);
+  Serial.print("Temp: ");
+  Serial.println(tempC);
+  Serial.println(voltage);
+  delay(1000);
+*/
+// ================= Display Data on OLED Display ================================================
+
+  // Display Solar Panel Voltage 
+  display.setTextSize(1);
+  display.clearDisplay();
+  display.setCursor(10, 10);
+  display.print(voltage,1);
+  display.print(" V");
+
+  // Display Solar Panel Current 
+  
+  display.setCursor(70, 10);
+
+  if (current >0 && current < 1 )
+  {
+   display.print(current*1000,0);
+   display.print(" mA");
+  }
+  else
+  {
+  display.print(current,2);  
+  display.print(" A");
+  }
+
+ // Display Solar Panel Power in Watt
+
+  display.setTextSize(2);
+  display.setCursor(10,25);
+  display.print(power);
+  display.print(" W");
+
+ // Display Energy Generated by the Solar Panel 
+  display.setCursor(10,45);
+  
+  if ( energy >= 1000 )
+  {
+   display.print(energy/1000,3);
+   display.print(" kWh");
+  }
+  else
+  {
+  display.print(energy,1);  
+  display.print(" Wh");
+  }
+  display.display();
+  display.clearDisplay();
+  
+  
+//// ================= Display Data on Blynk App ================================================
+//   Blynk.run();  
+//   Blynk.virtualWrite(0, voltage ); // virtual pin 0
+//   Blynk.virtualWrite(1, current ); // virtual pin 1 
+//   Blynk.virtualWrite(2, power);    // virtual pin 2
+//   Blynk.virtualWrite(3,energy/1000);// virtual pin 3
+//   Blynk.virtualWrite(4,tempC );    // virtual pin 4   
+//   Blynk.virtualWrite(5,saving);    // virtual pin 4  
+//   //delay(1000);
+}
+
+//========================= Function to Calculate Solar Panel Voltage ===================================
+  
+double return_voltage_value(int pin_no)
+{
+  double tmp = 0;
+  double ADCVoltage = 0;
+  double inputVoltage = 0;
+  double avg = 0;
+  for (int i = 0; i < 100; i++)
+  {
+    tmp = tmp + analogRead(pin_no);
+  }
+  avg = tmp / 100;
+  ADCVoltage = ((avg * 3.3) / (4095)) + 0.184 ; // 0.184 is offset adjust by heat and try
+  inputVoltage = ADCVoltage * VOLTAGE_SCALE; 
+  return inputVoltage;
+}
+
+
+//========================= Function to Calculate Solar Panel Current ===================================
+
+double return_current_value(int pin_no)
+{
+  double tmp = 0;
+  double avg = 0;
+  double ADCVoltage = 0;
+  double Amps = 0;
+  for (int z = 0; z < 150; z++)
+  {
+    tmp = tmp + analogRead(pin_no);
+  }
+  avg = tmp / 150;
+  ADCVoltage = ((avg*3331) / 4095); // Gets you mV
+  Amps = ((ADCVoltage * CURRENT_SCALE - ACSoffset ) / mVperAmp); // 1.5 is the scaling for voltage divider
+  return Amps;
+}
